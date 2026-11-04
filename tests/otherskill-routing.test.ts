@@ -2,7 +2,11 @@ import { test, expect } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { loadConfig, type Config } from "../lib/otherskill/config";
+import {
+  DEFAULT_DECISION_MODEL,
+  loadConfig,
+  type Config,
+} from "../lib/otherskill/config";
 import { createSkill, installLocal } from "../lib/otherskill/bank";
 import {
   route,
@@ -14,6 +18,7 @@ import {
 function fixture(run: (config: Config) => Promise<void>) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "otherskill-route-"));
   const config = loadConfig({ home: root, cwd: root });
+  config.allowPaidModels = true;
   const source = createSkill(
     path.join(root, "source"),
     "same",
@@ -238,7 +243,7 @@ test("new Decisions provider bounds retries, refuses paid overrides, and never r
       fetchFn: async (_url, init) => {
         calls++;
         expect(JSON.parse(String(init.body)).model).toBe(
-          "inception/mercury-decide:free",
+          DEFAULT_DECISION_MODEL,
         );
         return calls < 3
           ? new Response("private upstream text", { status: 429 })
@@ -249,7 +254,7 @@ test("new Decisions provider bounds retries, refuses paid overrides, and never r
     expect(calls).toBe(3);
     await expect(
       provider.decide({ ...request, model: "paid/model" }),
-    ).rejects.toThrow("paid overrides");
+    ).rejects.toThrow("model_override_rejected");
     expect(calls).toBe(3);
     let permanentCalls = 0;
     const denied = new Decisions(config, {
@@ -420,4 +425,100 @@ test("validated none is a successful no-match and makes no category requests", (
     expect(calls).toBe(1);
     expect(result.logicalCalls).toBe(1);
     expect(summary(result)).toBe("");
+  }));
+
+const probe = (config: Config): DecisionRequest => ({
+  model: config.model,
+  state: { user_prompt: "probe", stage: "probe" },
+  questions: {
+    selection: {
+      type: "choice",
+      instructions: "choose",
+      criteria: { s0: "selected", none: "none" },
+    },
+  },
+});
+
+test("paid decision models need an explicit opt-in before any HTTP call", () =>
+  fixture(async (config) => {
+    const previous = process.env.OTHERSKILL_ALLOW_PAID_MODELS;
+    delete process.env.OTHERSKILL_ALLOW_PAID_MODELS;
+    try {
+      let calls = 0;
+      const fetchFn = async (_url: string, init: RequestInit) => {
+        calls++;
+        return answer(JSON.parse(String(init.body)));
+      };
+      config.allowPaidModels = undefined;
+      const gated = new Decisions(config, { apiKey: "key", fetchFn });
+      await expect(gated.decide(probe(config))).rejects.toThrow(
+        "paid_model_requires_opt_in",
+      );
+      // A paid fallback behind a free primary is gated too.
+      const free = {
+        ...config,
+        model: "vendor/model:free",
+        fallbackModels: ["vendor/paid"],
+      };
+      await expect(
+        new Decisions(free, { apiKey: "key", fetchFn }).decide(probe(free)),
+      ).rejects.toThrow("paid_model_requires_opt_in");
+      expect(calls).toBe(0);
+      const freeOnly = { ...free, fallbackModels: [] };
+      await new Decisions(freeOnly, { apiKey: "key", fetchFn }).decide(
+        probe(freeOnly),
+      );
+      expect(calls).toBe(1);
+      process.env.OTHERSKILL_ALLOW_PAID_MODELS = "1";
+      expect((await gated.decide(probe(config))).choice).toBe("s0");
+      expect(calls).toBe(2);
+    } finally {
+      if (previous === undefined)
+        delete process.env.OTHERSKILL_ALLOW_PAID_MODELS;
+      else process.env.OTHERSKILL_ALLOW_PAID_MODELS = previous;
+    }
+  }));
+
+test("fallback models answer when the configured model is delisted, but not on credential errors", () =>
+  fixture(async (config) => {
+    config.limits.retries = 0;
+    config.fallbackModels = ["vendor/second", "vendor/third"];
+    const seen: string[] = [];
+    const provider = new Decisions(config, {
+      apiKey: "key",
+      fetchFn: async (_url, init) => {
+        const body = JSON.parse(String(init.body));
+        seen.push(body.model);
+        if (body.model === DEFAULT_DECISION_MODEL)
+          return new Response("gone", { status: 404 });
+        if (body.model === "vendor/second")
+          return new Response("bad", { status: 400 });
+        return answer(body);
+      },
+    });
+    expect((await provider.decide(probe(config))).choice).toBe("s0");
+    expect(seen).toEqual([
+      DEFAULT_DECISION_MODEL,
+      "vendor/second",
+      "vendor/third",
+    ]);
+    seen.length = 0;
+    const denied = new Decisions(config, {
+      apiKey: "key",
+      fetchFn: async (_url, init) => {
+        seen.push(JSON.parse(String(init.body)).model);
+        return new Response("denied", { status: 401 });
+      },
+    });
+    await expect(denied.decide(probe(config))).rejects.toThrow(
+      "openrouter_http_401",
+    );
+    expect(seen).toEqual([DEFAULT_DECISION_MODEL]);
+    const exhausted = new Decisions(config, {
+      apiKey: "key",
+      fetchFn: async () => new Response("gone", { status: 404 }),
+    });
+    await expect(exhausted.decide(probe(config))).rejects.toThrow(
+      "openrouter_http_404",
+    );
   }));

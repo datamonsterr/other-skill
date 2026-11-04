@@ -34,11 +34,25 @@ test("config supports nested stable category IDs and rejects traversal, duplicat
       );
     }
     for (const model of [
-      "paid/model",
+      "not-a-model",
       ["inception/mercury-decide:free", "paid/model"],
       "x/y:free,paid/model",
+      "x/y:nitro",
     ]) {
       write({ model });
+      expect(() => loadConfig({ configPath, home: root, cwd: root })).toThrow();
+    }
+    // Paid ids load; the opt-in is enforced when a request is sent.
+    write({ model: "paid/model", allowPaidModels: true });
+    expect(loadConfig({ configPath, home: root, cwd: root }).model).toBe(
+      "paid/model",
+    );
+    for (const fallbackModels of [
+      ["a/b", "a/b"],
+      ["a/b", "c/d", "e/f", "g/h", "i/j"],
+      ["bad"],
+    ]) {
+      write({ fallbackModels });
       expect(() => loadConfig({ configPath, home: root, cwd: root })).toThrow();
     }
     write({ categories: [{ id: "../escape", description: "bad" }] });

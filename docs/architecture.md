@@ -8,7 +8,7 @@ Two stages, both plain HTTP calls to one free OpenRouter model (never harness su
 
 Logical calls = `1 + N`; bounded retries add HTTP attempts. Injection deduplicates logical copies, keeps category provenance and keeps distinct same-name sources. Only names, full descriptions and provenance are injected, never skill bodies.
 
-Responses are validated: choices, finite probabilities, normalization, winner. Inputs are never silently truncated. Context, candidate or selection overflow returns a safe diagnostic. Only one explicit `provider/model:free` is accepted; paid overrides, fallback chains and substitution are rejected.
+Responses are validated: choices, finite probabilities, normalization, winner. Inputs are never silently truncated. Context, candidate or selection overflow returns a safe diagnostic. The configured model is one OpenRouter decision model id, optionally followed by up to four `fallbackModels` tried in order when a model fails (credential errors do not fall back). Paid models, meaning any id without `:free`, are refused before any HTTP call unless `allowPaidModels` (own or inherited global config), `--allow-paid-models` or `OTHERSKILL_ALLOW_PAID_MODELS=1` opts in. A `--model` override must equal the configured model for each request.
 
 ## Failure behavior
 
@@ -51,7 +51,7 @@ otherskill create ./my-skill --name my-skill --description 'When this applies' \
 otherskill search 'accessibility'                                         # needs gh auth or GH_TOKEN
 ```
 
-Automatic classification sends the skill name and description plus the taxonomy to the free model; `none` means no import. Review imported code and licenses before running it. GitHub tree URLs work; refs containing slashes need `--ref`.
+Automatic classification sends the skill name and description plus the taxonomy to the decision model; `none` means no import. Review imported code and licenses before running it. GitHub tree URLs work; refs containing slashes need `--ref`.
 
 ## References
 

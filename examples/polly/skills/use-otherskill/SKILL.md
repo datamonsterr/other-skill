@@ -9,7 +9,7 @@ Use `otherskill --help` and the relevant subcommand's help for installed-version
 
 ## Setup
 
-Run `otherskill setup` for the interactive menu. Choose the harness (Claude, Codex, Antigravity, OpenCode, or another supported adapter), global or project hook scope, OpenRouter API credentials, a free decision model, and enabled categories starting from the shipped defaults. Use documented noninteractive flags and dry-run mode for scripted setup.
+Run `otherskill setup` for the interactive menu. Choose the harness (Claude, Codex, Antigravity, OpenCode, or another supported adapter), global or project hook scope, OpenRouter API credentials, a decision model (and the paid-model opt-in when the model has no `:free` suffix), and enabled categories starting from the shipped defaults. Use documented noninteractive flags and dry-run mode for scripted setup.
 
 Keep the categorized bank outside native skill discovery. Only this companion is installed natively: Claude uses `.claude/skills/use-otherskill`; other supported harnesses use `.agents/skills/use-otherskill`. Preserve unrelated hooks, configuration, and native skills. Never print or commit API credentials.
 
@@ -29,4 +29,4 @@ Pass prompt text as a literal argument through the tool's argument interface or 
 
 Run `otherskill config` to inspect and quickly edit/apply settings interactively. Use its documented show/get/set interface for scripts. Check which project or global config is effective before changing the model, enabled categories, bank, or harness settings.
 
-Use a configured free OpenRouter decision model. Do not replace a failed free request with a paid model. Distinguish no matches from provider, quota, or configuration failures using diagnostics; report unavailable evidence as unavailable. Keep credentials and user prompts out of diagnostic output.
+Use the configured OpenRouter decision model and its configured `fallbackModels`. Paid models run only when the user opted in (`allowPaidModels: true`, `--allow-paid-models`, or `OTHERSKILL_ALLOW_PAID_MODELS=1`); never turn on that opt-in or add a paid model without the user asking. `paid_model_requires_opt_in` means the opt-in is missing. Distinguish no matches from provider, quota, or configuration failures using diagnostics; report unavailable evidence as unavailable. Keep credentials and user prompts out of diagnostic output.

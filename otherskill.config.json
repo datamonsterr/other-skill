@@ -1,6 +1,6 @@
 {
   "bankPath": ".otherskill/bank",
-  "model": "inception/mercury-decide:free",
+  "model": "perplexity/pplx-decider-flash-v1.2",
   "scope": "project",
   "agent": "claude",
   "categories": [

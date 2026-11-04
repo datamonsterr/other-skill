@@ -39,6 +39,7 @@ describe("DecisionProvider", () => {
     });
 
     const provider = new DecisionProvider({
+      allowPaidModels: true,
       apiKey: "test-key",
       fetchFn: mockFetch as any,
     });
@@ -89,6 +90,7 @@ describe("DecisionProvider", () => {
     });
 
     const provider = new DecisionProvider({
+      allowPaidModels: true,
       apiKey: "test-key",
       fetchFn: mockFetch as any,
       retryDelayMs: 10, // Fast delay for tests
@@ -114,6 +116,7 @@ describe("DecisionProvider", () => {
     });
 
     const provider = new DecisionProvider({
+      allowPaidModels: true,
       apiKey: "test-key",
       fetchFn: mockFetch as any,
       retries: 3,
@@ -171,6 +174,7 @@ describe("DecisionProvider", () => {
     });
 
     const provider = new DecisionProvider({
+      allowPaidModels: true,
       apiKey: "test-key",
       fetchFn: mockFetch as any,
     });

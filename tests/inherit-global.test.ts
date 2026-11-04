@@ -5,6 +5,7 @@ import path from "node:path";
 import { repoRoot } from "../lib/otherskill/setup";
 import {
   loadConfig,
+  paidModelsAllowed,
   routingView,
   withRoutingOverrides,
 } from "../lib/otherskill/config";
@@ -139,7 +140,7 @@ test("discover and route see categories and skills of both banks as one pool", a
   try {
     e.put("project", "ps", ["alpha"]);
     e.put("global", "gs", ["gamma"]);
-    const config = e.load();
+    const config = { ...e.load(), allowPaidModels: true };
     expect(config.inherited?.categories.map((c) => c.id)).toEqual([
       "gamma",
       "beta",
@@ -298,5 +299,28 @@ test("config set never writes inherited data; add installs only into the project
     expect(doctor.instances).toBe(1);
   } finally {
     e.done();
+  }
+});
+
+test("a project config inherits the global paid-model opt-in, and doctor reports access", async () => {
+  const gated = env();
+  const allowed = env({}, { allowPaidModels: true });
+  try {
+    expect(paidModelsAllowed(gated.load())).toBe(false);
+    expect(paidModelsAllowed(allowed.load())).toBe(true);
+    expect(paidModelsAllowed(allowed.load({ scope: "global" }))).toBe(true);
+    const doctor = await cli(gated, ["doctor"]);
+    expect(JSON.parse(doctor.out).modelAccess).toBe(
+      "paid_model_requires_opt_in",
+    );
+    const ok = await cli(allowed, ["doctor"]);
+    expect(JSON.parse(ok.out)).toMatchObject({
+      model: "perplexity/pplx-decider-flash-v1.2",
+      allowPaidModels: true,
+      modelAccess: "ok",
+    });
+  } finally {
+    gated.done();
+    allowed.done();
   }
 });

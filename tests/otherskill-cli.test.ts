@@ -97,8 +97,30 @@ test("canonical CLI setup/add/find/config and exposed secondary aliases run in i
     expect(fs.readFileSync(configFile, "utf8")).not.toContain("fake-key");
     expect((await cli(root, ["config", "show"])).json().key).toBe("configured");
     expect(
-      (await cli(root, ["config", "set", "model", "paid/model"])).code,
+      (await cli(root, ["config", "set", "model", "not-a-model"])).code,
     ).toBe(1);
+    expect(
+      (await cli(root, ["config", "set", "allowPaidModels", "maybe"])).code,
+    ).toBe(1);
+    expect(
+      (await cli(root, ["config", "set", "allowPaidModels", "true"])).code,
+    ).toBe(0);
+    expect((await cli(root, ["config", "get", "allowPaidModels"])).json()).toBe(
+      true,
+    );
+    expect(
+      (
+        await cli(root, [
+          "config",
+          "set",
+          "fallbackModels",
+          "respan/span-02,~typesafe/jev-latest",
+        ])
+      ).code,
+    ).toBe(0);
+    expect(
+      (await cli(root, ["config", "get", "fallbackModels"])).json(),
+    ).toEqual(["respan/span-02", "~typesafe/jev-latest"]);
     expect(
       (
         await cli(root, [

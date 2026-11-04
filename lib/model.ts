@@ -113,6 +113,8 @@ export interface SkillSelectionResult {
  */
 export interface OtherSkillOptions {
   model?: string;
+  /** Opt in to paid decision models (also OTHERSKILL_ALLOW_PAID_MODELS=1). */
+  allowPaidModels?: boolean;
   apiKey?: string;
   threshold?: number;
   maxSkills?: number;

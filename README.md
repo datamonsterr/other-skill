@@ -61,7 +61,7 @@ Setup saves the primary `agent` and the full `agents` list; `config --apply` and
 
 ```text
 prompt -> harness hook -> otherskill find
-                            |-- stage 1: free model picks categories
+                            |-- stage 1: decision model picks categories
                             |-- stage 2: one request per category picks skills
                             v
           additionalContext: skill names + descriptions + provenance
@@ -82,7 +82,9 @@ Config is one JSON file. Precedence: `--config` / `OTHERSKILL_CONFIG` > nearest 
 ```jsonc
 {
   "bankPath": ".otherskill/bank", // relative to this file; global default ~/.local/share/otherskill/bank
-  "model": "inception/mercury-decide:free", // exactly one :free model; paid models rejected
+  "model": "perplexity/pplx-decider-flash-v1.2", // default; any OpenRouter decision model id
+  "fallbackModels": ["respan/span-02", "~typesafe/jev-latest"], // optional, tried in order (max 4)
+  "allowPaidModels": true, // required for any model without :free; project configs inherit it from global
   "scope": "project", // global | project
   "agent": "claude",
   "categories": [
@@ -98,6 +100,18 @@ Config is one JSON file. Precedence: `--config` / `OTHERSKILL_CONFIG` > nearest 
 }
 ```
 
+### Decision model
+
+OtherSkill calls `https://openrouter.ai/api/alpha/decisions`, which only serves decision-output models (list them with `curl 'https://openrouter.ai/api/v1/models?output_modalities=decisions'`). Text models such as `google/gemma-4-26b-a4b-it:free` return HTTP 400 there. `inception/mercury-decide:free` is delisted, and the only free decision model left, `respan/span-01-lite:free`, is a behavior scorer that rejects choice questions.
+
+So the default is `perplexity/pplx-decider-flash-v1.2`, a paid decision model at $0.01 per million prompt tokens (about $0.00001 per `find`). Paid models never run without an explicit opt-in: set `"allowPaidModels": true`, pass `--allow-paid-models` to `setup`/`config`, or set `OTHERSKILL_ALLOW_PAID_MODELS=1`. Without it, `find` injects nothing and reports `paid_model_requires_opt_in`; `doctor` shows the same in `modelAccess`.
+
+`fallbackModels` lists models tried in order when a model fails (HTTP 404/400/429/5xx, timeout, invalid answer). Credential errors (401/402) do not fall back. Each model gets its own retries and deadline, so a long chain adds latency. Other cheap decision models at the time of writing: `respan/span-02` ($0.01/M), `baseten/joey-1` ($0.01/M, 16k context, too small for large categories), `~typesafe/jev-latest` ($0.042/M).
+
+```bash
+otherskill config set model perplexity/pplx-decider-flash-v1.2 --allow-paid-models --fallback-models respan/span-02,~typesafe/jev-latest
+```
+
 Starter file: [otherskill.config.example.json](otherskill.config.example.json). This repo's own project config is [otherskill.config.json](otherskill.config.json) ([docs/project-skills.md](docs/project-skills.md)).
 
 The API key is never in config. `OPENROUTER_API_KEY` in the environment wins over the private file `<home>/.config/otherskill/credentials.json` (mode `0600`, written by `--key-env` or `--key-stdin`).
@@ -111,7 +125,7 @@ The API key is never in config. `OPENROUTER_API_KEY` in the environment wins ove
 | `--max-skills N`, `--max-categories N` | cap selections              |
 | `--timeout-ms N`                       | per-request deadline        |
 | `--categories a,b`                     | restrict enabled categories |
-| `--model id:free`                      | override model              |
+| `--model provider/model`               | override model              |
 | `--config FILE`, `--home DIR`          | config and home roots       |
 
 Selections over `--max-skills` are now truncated to the top N by probability (previously an error).

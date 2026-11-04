@@ -1,5 +1,16 @@
 import { z } from "zod";
-import { type Config, freeModel, routingView } from "./config";
+import {
+  type Config,
+  decisionModel,
+  paidModelsAllowed,
+  routingView,
+} from "./config";
+import {
+  PAID_MODEL_OPT_IN,
+  blockedPaidModels,
+  envAllowsPaidModels,
+  modelChain,
+} from "../decision_models";
 import { discoverBank, type BankSkill, readSkill } from "./bank";
 export const DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions";
 export interface DecisionRequest {
@@ -35,6 +46,18 @@ export interface Choice {
   probabilities: Record<string, number>;
   confidence: number;
 }
+/** Failures that the next model in the fallback chain may succeed on. */
+function fallbackEligible(code: string): boolean {
+  if (code === "openrouter_http_401" || code === "openrouter_http_402")
+    return false;
+  return (
+    code.startsWith("openrouter_http_") ||
+    code.startsWith("invalid_decision_") ||
+    code === "openrouter_network_or_timeout" ||
+    code === "openrouter_unavailable" ||
+    code === "inconsistent_decision_choice"
+  );
+}
 export class Decisions {
   private readonly apiKey: string;
   private readonly fetchFn: (
@@ -50,15 +73,39 @@ export class Decisions {
   ) {
     this.apiKey = options.apiKey ?? process.env.OPENROUTER_API_KEY ?? "";
     this.fetchFn = options.fetchFn ?? fetch;
-    freeModel(config.model);
+    decisionModel(config.model);
+    for (const model of config.fallbackModels ?? []) decisionModel(model);
   }
+  /** Ask the configured model, then each fallback model, until one answers. */
   async decide(
     request: DecisionRequest,
     limits = this.config.limits,
   ): Promise<Choice> {
-    freeModel(request.model);
+    decisionModel(request.model);
     if (request.model !== this.config.model)
       throw new RoutingError("model_override_rejected");
+    const chain = modelChain(this.config.model, this.config.fallbackModels);
+    const allowPaid = paidModelsAllowed(this.config) || envAllowsPaidModels();
+    if (!this.apiKey)
+      throw new RoutingError("openrouter_credential_unavailable");
+    if (blockedPaidModels(chain, allowPaid).length)
+      throw new RoutingError(PAID_MODEL_OPT_IN);
+    let lastError: unknown;
+    for (const model of chain) {
+      try {
+        return await this.decideWith({ ...request, model }, limits);
+      } catch (error) {
+        if (!(error instanceof RoutingError) || !fallbackEligible(error.code))
+          throw error;
+        lastError = error;
+      }
+    }
+    throw lastError;
+  }
+  private async decideWith(
+    request: DecisionRequest,
+    limits: Config["limits"],
+  ): Promise<Choice> {
     const body = JSON.stringify(request);
     const criteria = Object.keys(request.questions.selection.criteria);
     if (

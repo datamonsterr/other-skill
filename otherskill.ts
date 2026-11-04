@@ -5,8 +5,9 @@ import { parseArgs } from "node:util";
 import {
   loadConfig,
   defaultBankPath,
-  freeModel,
+  decisionModel,
   configData,
+  paidModelsAllowed,
   configTarget,
   writeConfig,
   defaultProjectBankPath,
@@ -44,6 +45,12 @@ import {
   type Agent,
 } from "./lib/otherskill/setup";
 import { hookInput, hookOutput } from "./lib/otherskill/hook";
+import {
+  PAID_MODEL_OPT_IN,
+  blockedPaidModels,
+  envAllowsPaidModels,
+  modelChain,
+} from "./lib/decision_models";
 import { menu } from "./lib/otherskill/menu";
 import { update } from "./lib/otherskill/update";
 
@@ -65,7 +72,7 @@ Secondary commands:
                                      Generate SKILL.md and classify/copy into the bank
   classify <dir>                     Reclassify and copy a skill (explicit --category or model-driven)
   list                               Show scoped bank instances and membership
-  doctor [--live]                    Check config, native visibility, hook paths and optionally free API
+  doctor [--live]                    Check config, native visibility, hook paths and optionally the decision API
 Aliases: install = add; hook = find; select = find --json (routing result)
 Options:
   --agent claude|codex|antigravity|opencode   Explicit single harness overrides detection
@@ -74,7 +81,10 @@ Options:
   --home <dir> --cwd <dir>            Isolated home/project roots
   --config <file>                    Explicit config override (otherwise nearest ancestor, then global)
                                      Project configs also inherit the global config's categories and bank (inheritGlobal: false opts out)
-  --model <provider/model:free>       Configure one free model; paid models/fallback chains rejected
+  --model <provider/model>           Decision model (default perplexity/pplx-decider-flash-v1.2, paid)
+  --fallback-models <id,id>          Decision models tried in order when the model fails (max 4)
+  --allow-paid-models               Opt in to paid decision models (setup/config persist it; also
+                                     OTHERSKILL_ALLOW_PAID_MODELS=1). Without it only :free models run
   --categories <id,id>               Enabled category IDs (setup/config/find)
   --max-skills N --max-categories N  Per-call routing limits; setup embeds them in hooks
   --timeout-ms N                    Per-request deadline; setup embeds it in hooks
@@ -89,7 +99,7 @@ Options:
                                      otherskill.config.json or .otherskill/config.json at the project
                                      root); persists portableHooks
   --apply                           Apply config settings to harness hooks
-  --live                            Doctor: tiny free-model probe (no paid fallback)
+  --live                            Doctor: one tiny decision probe through the model chain
   --check                           Update: compare installed commit with remote HEAD, no writes
   --help                            Show this help for any command
 Keys: environment OPENROUTER_API_KEY overrides private ~/.config/otherskill/credentials.json.
@@ -106,6 +116,8 @@ Install harness hooks, the launcher and the companion skill, and write config.
   --key-env <ENV> | --key-stdin  Save the OpenRouter key privately
   --model, --categories, --max-skills, --max-categories, --timeout-ms
                                Persist routing settings and embed them in the hook
+  --fallback-models <id,id>    Persist decision models tried when the model fails
+  --allow-paid-models          Persist the opt-in to paid decision models
   --home <dir> --cwd <dir> --config <file>
 `,
   find: `Usage: otherskill find --agent <harness> [--prompt <text>] [options]
@@ -138,7 +150,9 @@ Without an action, edit settings interactively. With an action, run scripted.
   --apply               Reapply harness hooks after the change
   --scope global|project, --dry-run, --home, --cwd, --config
   --model, --categories, --max-skills, --max-categories, --timeout-ms
-Settable fields: key, model, bankPath, portableHooks, scope, agent, categories, taxonomy, limits.
+  --fallback-models <id,id>, --allow-paid-models
+Settable fields: key, model, fallbackModels, allowPaidModels, bankPath, portableHooks, scope, agent,
+categories, taxonomy, limits.
 `,
   update: `Usage: otherskill update [--check|--dry-run] [--ref <branch-or-tag>]
 Install a new snapshot (default master), repoint the launcher and reapply hooks.
@@ -147,7 +161,7 @@ Install a new snapshot (default master), repoint the launcher and reapply hooks.
 `,
   doctor: `Usage: otherskill doctor [--live]
 Check config, bank, native skill visibility, hook paths and credentials.
-  --live                Send one tiny free-model probe
+  --live                Send one tiny decision probe through the model chain
   --home, --cwd, --config
 `,
   search: `Usage: otherskill search <query>
@@ -177,6 +191,8 @@ const options = {
   config: { type: "string" },
   model: { type: "string" },
   categories: { type: "string" },
+  "fallback-models": { type: "string" },
+  "allow-paid-models": { type: "boolean" },
   "max-skills": { type: "string" },
   "max-categories": { type: "string" },
   "timeout-ms": { type: "string" },
@@ -261,7 +277,19 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
         ? { scope: scopeValue(values.scope, "global") }
         : {}),
     });
-    if (values.model) config = { ...config, model: freeModel(values.model) };
+    if (values.model)
+      config = { ...config, model: decisionModel(values.model) };
+    const fallbackModels =
+      values["fallback-models"] === undefined
+        ? undefined
+        : values["fallback-models"]
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .map(decisionModel);
+    if (fallbackModels) config = { ...config, fallbackModels };
+    if (values["allow-paid-models"])
+      config = { ...config, allowPaidModels: true };
     const dryRun = values["dry-run"] ?? false;
     const overrides: RoutingOverrides = {
       ...(values.model !== undefined ? { model: values.model } : {}),
@@ -351,10 +379,13 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
         data = {
           ...data,
           model: answers.model,
+          allowPaidModels: answers.allowPaidModels,
           enabledCategories: answers.enabledCategories,
         };
       }
       if (values.model) data.model = values.model;
+      if (fallbackModels) data.fallbackModels = fallbackModels;
+      if (values["allow-paid-models"]) data.allowPaidModels = true;
       if (values.categories !== undefined)
         data.enabledCategories = values.categories.trim()
           ? values.categories.split(",").map((s) => s.trim())
@@ -410,10 +441,15 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
           if (!field || value === undefined)
             throw new Error("config set requires field and value");
           if (field === "model" || field === "bankPath") data[field] = value;
-          else if (field === "portableHooks") {
+          else if (field === "portableHooks" || field === "allowPaidModels") {
             if (value !== "true" && value !== "false")
-              throw new Error("portableHooks must be true or false");
-            data.portableHooks = value === "true";
+              throw new Error(`${field} must be true or false`);
+            data[field] = value === "true";
+          } else if (field === "fallbackModels") {
+            data.fallbackModels = value
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean);
           } else if (field === "scope") {
             scope = scopeValue(value, scope);
             data.scope = scope;
@@ -696,6 +732,14 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
             inheritedBank: config.inherited?.bankPath ?? null,
             instances: skills.length,
             model: config.model,
+            fallbackModels: config.fallbackModels ?? [],
+            allowPaidModels: paidModelsAllowed(config),
+            modelAccess: blockedPaidModels(
+              modelChain(config.model, config.fallbackModels),
+              paidModelsAllowed(config) || envAllowsPaidModels(),
+            ).length
+              ? PAID_MODEL_OPT_IN
+              : "ok",
             credential: readKey(config.home) ? "configured" : "unavailable",
             credentialSource: keySource(config.home),
             credentialFile: credentialPath(config.home),

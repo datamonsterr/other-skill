@@ -1,4 +1,9 @@
-import { type Config, FREE_MODEL } from "./config";
+import {
+  type Config,
+  DEFAULT_DECISION_MODEL,
+  paidModelsAllowed,
+} from "./config";
+import { isFreeModel } from "../decision_models";
 import { isAgentTarget, type Agent, type SetupTarget } from "./setup";
 export interface MenuResult {
   config: Config;
@@ -7,6 +12,7 @@ export interface MenuResult {
   targets: SetupTarget[];
   scope: "global" | "project";
   model: string;
+  allowPaidModels?: boolean;
   enabledCategories: string[];
   key?: string;
   companion: boolean;
@@ -357,9 +363,19 @@ export async function menu(
     const model =
       (
         await session.ask(
-          `Free decision model [${config.model || FREE_MODEL}]: `,
+          `Decision model [${config.model || DEFAULT_DECISION_MODEL}]: `,
         )
       ).trim() || config.model;
+    let allowPaidModels = config.allowPaidModels;
+    if (!isFreeModel(model) && !paidModelsAllowed(config))
+      allowPaidModels =
+        (
+          await session.ask(
+            `${model} is a paid decision model (billed per token by OpenRouter). Allow paid decision models? [y/N]: `,
+          )
+        )
+          .trim()
+          .toLowerCase() === "y" || undefined;
     output.write(
       "Categories:\n" +
         config.categories
@@ -399,6 +415,7 @@ export async function menu(
       scope,
       key: key || undefined,
       model,
+      allowPaidModels,
       enabledCategories,
       companion,
       apply,

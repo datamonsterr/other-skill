@@ -11,68 +11,71 @@ import {
 } from "./model";
 import { buildSkillState, buildSkillCriteria } from "./parse_skill";
 import {
+  DEFAULT_DECISION_MODEL,
+  envAllowsPaidModels,
+  isDecisionModelId,
+  isFreeModel,
+} from "./decision_models";
+import {
   DEFAULT_SYSTEM_PROMPT,
   buildDecisionInstructions,
 } from "./system_prompt";
 
 export const DEFAULT_OPENROUTER_DECISIONS_URL =
   "https://openrouter.ai/api/alpha/decisions";
-export const DEFAULT_FREE_MODEL = "inception/mercury-decide:free";
-export const DEFAULT_DECISION_MODEL = DEFAULT_FREE_MODEL;
+export {
+  DEFAULT_DECISION_MODEL,
+  isFreeModel,
+} from "./decision_models";
 
-/**
- * Check if a model is an authorized free decision model.
- * Only free decision models (ending with the exact :free suffix) are allowed.
- */
-export function isFreeModel(model?: string): boolean {
-  if (!model || typeof model !== "string") return false;
-  const trimmed = model.trim().toLowerCase();
-  return /^[a-z0-9_.-]+\/[a-z0-9_.-]+:free$/.test(trimmed);
+function paidModelError(model: string): Error {
+  return new Error(
+    `Paid model "${model}" requires opt-in: pass allowPaidModels: true or set OTHERSKILL_ALLOW_PAID_MODELS=1.`,
+  );
+}
+
+/** Throw unless `model` is a decision model id and, when paid, opted in. */
+export function assertModelAllowed(model: string, allowPaid: boolean): string {
+  if (!isDecisionModelId(model))
+    throw new Error(`Invalid decision model id "${model}".`);
+  if (!allowPaid && !isFreeModel(model)) throw paidModelError(model);
+  return model;
 }
 
 /**
  * Resolve the active decision model.
  * Precedence:
- * 1. optionsModel (must be free, else error)
- * 2. OTHERSKILL_MODEL env var, then legacy SKILL_SELECTOR_MODEL (must be free, else error)
- * 3. Compatible legacy free-only env vars (MODEL, JEV_MODEL) ONLY if free
- * 4. DEFAULT_FREE_MODEL ("inception/mercury-decide:free")
+ * 1. optionsModel (paid models need allowPaid, else error)
+ * 2. OTHERSKILL_MODEL env var, then legacy SKILL_SELECTOR_MODEL (same rule)
+ * 3. Legacy MODEL / JEV_MODEL, skipped when paid without opt-in
+ * 4. DEFAULT_DECISION_MODEL (paid: requests fail until opted in)
  */
-export function resolveActiveModel(optionsModel?: string): string {
-  if (optionsModel) {
-    if (!isFreeModel(optionsModel)) {
-      throw new Error(
-        `Paid model "${optionsModel}" rejected: only free decision models (such as ${DEFAULT_FREE_MODEL}) are authorized.`,
-      );
-    }
-    return optionsModel;
-  }
+export function resolveActiveModel(
+  optionsModel?: string,
+  allowPaid = envAllowsPaidModels(),
+): string {
+  if (optionsModel) return assertModelAllowed(optionsModel, allowPaid);
 
   const envSelectorModel =
     process.env.OTHERSKILL_MODEL || process.env.SKILL_SELECTOR_MODEL;
-  if (envSelectorModel) {
-    if (!isFreeModel(envSelectorModel)) {
-      throw new Error(
-        `Paid model "${envSelectorModel}" rejected: only free decision models (such as ${DEFAULT_FREE_MODEL}) are authorized.`,
-      );
-    }
-    return envSelectorModel;
-  }
+  if (envSelectorModel) return assertModelAllowed(envSelectorModel, allowPaid);
 
   const legacyModel = process.env.MODEL || process.env.JEV_MODEL;
-  if (legacyModel) {
-    if (isFreeModel(legacyModel)) {
-      return legacyModel;
-    }
-    // Legacy model is paid (e.g. ~typesafe/jev-latest): do not silently use it!
-  }
+  if (
+    legacyModel &&
+    isDecisionModelId(legacyModel) &&
+    (allowPaid || isFreeModel(legacyModel))
+  )
+    return legacyModel;
 
-  return DEFAULT_FREE_MODEL;
+  return DEFAULT_DECISION_MODEL;
 }
 
 export interface DecisionProviderConfig {
   apiKey?: string;
   model?: string;
+  /** Opt in to paid decision models (also OTHERSKILL_ALLOW_PAID_MODELS=1). */
+  allowPaidModels?: boolean;
   endpoint?: string;
   retries?: number;
   retryDelayMs?: number;
@@ -89,6 +92,7 @@ export interface DecisionProviderConfig {
 export class DecisionProvider {
   private apiKey: string;
   private model: string;
+  private allowPaid: boolean;
   private endpoint: string;
   private retries: number;
   private retryDelayMs: number;
@@ -104,7 +108,8 @@ export class DecisionProvider {
       process.env.OPENROUTER_API_KEY ||
       process.env.JEV_API_KEY ||
       "";
-    this.model = resolveActiveModel(config.model);
+    this.allowPaid = config.allowPaidModels ?? envAllowsPaidModels();
+    this.model = resolveActiveModel(config.model, this.allowPaid);
     this.endpoint = config.endpoint || DEFAULT_OPENROUTER_DECISIONS_URL;
     this.retries = Math.max(1, Math.min(3, Math.floor(config.retries ?? 3)));
     this.retryDelayMs =
@@ -120,11 +125,7 @@ export class DecisionProvider {
     request: DecisionRequest,
   ): Promise<DecisionResponse> {
     const modelToUse = request.model || this.model;
-    if (!isFreeModel(modelToUse)) {
-      throw new Error(
-        `Paid model "${modelToUse}" rejected: only free decision models (such as ${DEFAULT_FREE_MODEL}) are authorized.`,
-      );
-    }
+    assertModelAllowed(modelToUse, this.allowPaid);
 
     if (!this.apiKey) {
       throw new Error(
@@ -229,7 +230,10 @@ export class DecisionProvider {
     const threshold = options.threshold ?? 0.05;
     const maxSkills = options.maxSkills ?? 3;
     const includeNone = options.includeNone ?? true;
-    const activeModel = resolveActiveModel(options.model || this.model);
+    const activeModel = resolveActiveModel(
+      options.model || this.model,
+      options.allowPaidModels ?? this.allowPaid,
+    );
 
     // Build state and criteria (compact: true omits redundant skill array from state, saving ~11,000 input tokens)
     const state = buildSkillState(
