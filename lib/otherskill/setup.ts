@@ -114,6 +114,8 @@ function companionSource(): string {
 const shippedCompanionHashes = [
   "e7138a1cfe8a198d634138eddf94b23a10b4757aa204e2c7b08e3572f74aed0b",
   "0a29c6344027bc4205f1749dc10b45e7e6ef3534832e2305311eeb561729911c",
+  // Formatted copy of the companion that documents the paid-model opt-in.
+  "cde5823d914fafb1ed6a76087ea89a93e807422323f313d0eec92f592fbc1593",
 ];
 function isUnmodifiedCompanion(value: string, content: string): boolean {
   if (value === content) return true;

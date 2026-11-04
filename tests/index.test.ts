@@ -31,6 +31,7 @@ describe("index programmatic API", () => {
         "Dynamically select and route the right skill for an agent prompt to avoid context bloat",
       options: {
         apiKey: "offline-test-key",
+        allowPaidModels: true,
         threshold: 0.05,
         fetchFn: mockFetch as any,
       },

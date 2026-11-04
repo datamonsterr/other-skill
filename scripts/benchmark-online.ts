@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { DecisionProvider } from "../lib/provider";
 import type { Skill } from "../lib/model";
+import { DEFAULT_DECISION_MODEL } from "../lib/decision_models";
 
 interface BenchmarkCase {
   id: string;
@@ -61,7 +62,7 @@ async function runOnlineBenchmark() {
   console.log(`Dataset: MetaTool / ToolE (HuggingFace / GitHub)`);
   console.log(`Total Candidate Tools in Bank: ${candidateSkills.length}`);
   console.log(`Total Benchmark Test Cases: ${testcases.length}`);
-  console.log(`Model: ${process.env.MODEL || "inception/mercury-decide:free"}`);
+  console.log(`Model: ${process.env.MODEL || DEFAULT_DECISION_MODEL}`);
   console.log(`======================================================\n`);
 
   const provider = new DecisionProvider();
@@ -199,7 +200,7 @@ async function runOnlineBenchmark() {
   const report = {
     benchmark: "MetaTool (ToolE) Tool Selection & Awareness Benchmark",
     timestamp: new Date().toISOString(),
-    model: process.env.MODEL || "inception/mercury-decide:free",
+    model: process.env.MODEL || DEFAULT_DECISION_MODEL,
     totalCases: testcases.length,
     passedCount,
     accuracyPct: accuracy,

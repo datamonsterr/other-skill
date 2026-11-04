@@ -271,6 +271,7 @@ export async function selectSkills(params: {
     new DecisionProvider({
       apiKey: options.apiKey,
       model: options.model,
+      allowPaidModels: options.allowPaidModels,
       retries: options.retries,
       retryDelayMs: options.retryDelayMs,
       fetchFn: options.fetchFn,

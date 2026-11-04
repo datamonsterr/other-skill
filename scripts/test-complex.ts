@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { selectSkills } from "../index";
+import { DEFAULT_DECISION_MODEL } from "../lib/decision_models";
 
 interface ComplexTestCase {
   id: string;
@@ -40,7 +41,7 @@ async function runComplexEvaluation() {
   console.log(`\n======================================================`);
   console.log(`🚀 Starting OtherSkill Complex & Multi-Step Evaluation`);
   console.log(`Total Cases: ${testcases.length}`);
-  console.log(`Model: ${process.env.MODEL || "inception/mercury-decide:free"}`);
+  console.log(`Model: ${process.env.MODEL || DEFAULT_DECISION_MODEL}`);
   console.log(`======================================================\n`);
 
   const results: ComplexEvalResult[] = [];

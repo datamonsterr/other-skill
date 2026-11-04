@@ -12,4 +12,4 @@ Harness hooks are one shell command. Users want different limits or timeouts per
 
 ## Consequences
 
-Hook commands are self-describing and per-harness tuning needs no extra files. Config stays the single source of defaults. Model overrides still must be one `:free` model. The flag set is a public interface to keep stable.
+Hook commands are self-describing and per-harness tuning needs no extra files. Config stays the single source of defaults. Model overrides are one decision model id; paid ones need the opt-in (see [ADR 0009](0009-paid-decision-models.md)). The flag set is a public interface to keep stable.

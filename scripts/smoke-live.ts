@@ -1,15 +1,21 @@
 #!/usr/bin/env bun
-/** Public catalog verification; free-only live requests only when an existing credential is available. */
+/** Public catalog verification; live requests only with a credential, and paid models only after OTHERSKILL_ALLOW_PAID_MODELS=1. */
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { loadConfig, FREE_MODEL } from "../lib/otherskill/config";
+import { loadConfig } from "../lib/otherskill/config";
+import {
+  DEFAULT_DECISION_MODEL,
+  envAllowsPaidModels,
+  isFreeModel,
+} from "../lib/decision_models";
 import { readKey } from "../lib/otherskill/credentials";
 import { Decisions, route, diagnostic } from "../lib/otherskill/routing";
 import { createSkill, installLocal } from "../lib/otherskill/bank";
+const MODEL = process.env.OTHERSKILL_MODEL || DEFAULT_DECISION_MODEL;
 const evidence: Record<string, unknown> = {
   checkedAt: new Date().toISOString(),
-  model: FREE_MODEL,
+  model: MODEL,
   endpoint: "https://openrouter.ai/api/alpha/decisions",
 };
 try {
@@ -26,13 +32,13 @@ try {
       architecture: unknown;
     }>;
   };
-  const model = catalog.data.find((m) => m.id === FREE_MODEL);
-  if (!model) throw new Error("free model absent from public catalog");
-  if (
-    Number(model.pricing.prompt) !== 0 ||
-    Number(model.pricing.completion) !== 0
-  )
-    throw new Error("model pricing is not zero; refusing probe");
+  const model = catalog.data.find((m) => m.id === MODEL);
+  if (!model) throw new Error("decision model absent from public catalog");
+  const free =
+    Number(model.pricing.prompt) === 0 &&
+    Number(model.pricing.completion) === 0;
+  if (!free && (isFreeModel(MODEL) || !envAllowsPaidModels()))
+    throw new Error("paid model without opt-in; refusing probe");
   evidence.catalog = {
     status: "passed",
     id: model.id,
@@ -43,7 +49,8 @@ try {
 } catch {
   evidence.catalog = {
     status: "unavailable",
-    reason: "public model catalog could not verify zero pricing",
+    reason:
+      "model missing from the public decision catalog, or paid without OTHERSKILL_ALLOW_PAID_MODELS=1",
   };
 }
 let key: string | undefined;
@@ -64,16 +71,18 @@ if (!key || /your_openrouter|your-key|placeholder/i.test(key)) {
 } else if ((evidence.catalog as { status?: string })?.status !== "passed") {
   evidence.tinyDecision = {
     status: "unavailable",
-    reason: "free pricing unverified",
+    reason: "catalog or paid opt-in unverified",
   };
   evidence.twoStage = {
     status: "unavailable",
-    reason: "free pricing unverified",
+    reason: "catalog or paid opt-in unverified",
   };
 } else {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "otherskill-live-"));
   try {
     const config = loadConfig({ home: root, cwd: root });
+    config.model = MODEL;
+    config.allowPaidModels = envAllowsPaidModels();
     config.categories = [
       { id: "frontend/ui-ux", description: "Design accessible web interfaces" },
       { id: "testing", description: "Write and run automated tests" },

@@ -2,20 +2,22 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { z } from "zod";
+import {
+  DEFAULT_DECISION_MODEL,
+  MAX_FALLBACK_MODELS,
+  decisionModel,
+  isDecisionModelId,
+} from "../decision_models";
 
 /** Default bank location as written in config (home-relative). */
 export const DEFAULT_BANK_PATH = "~/.local/share/otherskill/bank";
 /** Default bank location resolved against `home`. */
 export const defaultBankPath = (home: string) =>
   path.join(home, DEFAULT_BANK_PATH.slice(2));
-export const FREE_MODEL = "inception/mercury-decide:free";
-export function freeModel(model: string): string {
-  if (!/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+:free$/.test(model))
-    throw new Error(
-      "model must be a single explicit :free model; paid overrides and fallback chains are forbidden",
-    );
-  return model;
-}
+export {
+  DEFAULT_DECISION_MODEL,
+  decisionModel,
+} from "../decision_models";
 export const starterCategories = [
   {
     id: "frontend/ui-ux",
@@ -50,19 +52,10 @@ const hookParams = z
     maxCategories: z.number().int().min(1).max(254).optional(),
     timeoutMs: z.number().int().min(10).max(60000).optional(),
     categories: z.array(id).optional(),
-    model: z
-      .string()
-      .refine((value) => {
-        try {
-          freeModel(value);
-          return true;
-        } catch {
-          return false;
-        }
-      })
-      .optional(),
+    model: z.string().refine(isDecisionModelId).optional(),
   })
   .strict();
+const modelId = z.string().refine(isDecisionModelId, "invalid model id");
 const schema = z
   .object({
     bankPath: z
@@ -74,7 +67,16 @@ const schema = z
         "bank path traversal is forbidden",
       )
       .default(DEFAULT_BANK_PATH),
-    model: z.string().default(FREE_MODEL),
+    model: modelId.default(DEFAULT_DECISION_MODEL),
+    fallbackModels: z
+      .array(modelId)
+      .max(MAX_FALLBACK_MODELS)
+      .refine(
+        (value) => new Set(value).size === value.length,
+        "fallbackModels must be unique",
+      )
+      .optional(),
+    allowPaidModels: z.boolean().optional(),
     scope: z.enum(["global", "project"]).default("global"),
     agent: agentId.optional(),
     agents: z
@@ -119,6 +121,7 @@ export interface Inherited {
   bankPath: string;
   categories: Category[];
   enabledCategories?: string[];
+  allowPaidModels?: boolean;
 }
 export type Config = Parsed & {
   configPath?: string;
@@ -154,7 +157,7 @@ export function withRoutingOverrides(
     ...(categories !== undefined ? { enabledCategories: categories } : {}),
     limits: { ...config.limits, ...limits },
   });
-  freeModel(parsed.model);
+  decisionModel(parsed.model);
   if (
     parsed.enabledCategories &&
     (new Set(parsed.enabledCategories).size !==
@@ -313,6 +316,7 @@ function inherit(config: Config, file?: string, scope?: string): Config {
       bankPath: g.bankPath,
       categories: g.categories,
       enabledCategories: g.enabledCategories,
+      allowPaidModels: g.allowPaidModels,
     },
   };
 }
@@ -349,7 +353,7 @@ function readConfigFile(
     throw new Error(
       "enabledCategories must reference unique configured category IDs",
     );
-  freeModel(config.model);
+  decisionModel(config.model);
   if (
     new Set(config.categories.map((c) => c.id)).size !==
     config.categories.length
@@ -408,6 +412,13 @@ export interface RoutingView {
   banks: string[];
 }
 /** Categories, enabled set and banks routing sees: project plus inherited global as one pool. */
+/** Paid opt-in from this config or, for a project config, the inherited global config. */
+export function paidModelsAllowed(config: Config): boolean {
+  return (
+    config.allowPaidModels === true ||
+    config.inherited?.allowPaidModels === true
+  );
+}
 export function routingView(config: Config): RoutingView {
   const g = config.inherited;
   if (!g)
@@ -470,7 +481,7 @@ export function writeConfig(
   }
   const parsed = schema.safeParse(data);
   if (!parsed.success) throw new Error("invalid OtherSkill configuration");
-  freeModel(parsed.data.model);
+  decisionModel(parsed.data.model);
   if (
     new Set(parsed.data.categories.map((c) => c.id)).size !==
     parsed.data.categories.length

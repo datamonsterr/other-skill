@@ -16,7 +16,7 @@ import {
   companionDir,
   planMultiSetup,
   planSetup,
-  setupTargets,
+  type setupTargets,
 } from "../lib/otherskill/setup";
 import { checkAgentStatus } from "../scripts/setup-agent";
 
@@ -143,8 +143,10 @@ describe("interactive setup menu", () => {
     const home = path.join(root, "home");
     const cwd = path.join(root, "project");
     const config = configFor(home, cwd);
-    // Confirm targets, accept scope, blank key, model and categories, apply.
-    const { result, transcript } = await driveMenu("\r\r\r\r\r\r", config);
+    // Confirm targets, accept scope, blank key and model, allow paid, categories, apply.
+    const { result, transcript } = await driveMenu("\r\r\r\ry\r\r\r", config);
+    expect(transcript).toContain("Allow paid decision models?");
+    expect(result.allowPaidModels).toBe(true);
     expect(result.targets).toEqual(["agents"]);
     expect(result.agents).toEqual([]);
     expect(result.agent).toBeUndefined();
@@ -161,8 +163,9 @@ describe("interactive setup menu", () => {
       agent: "opencode",
       agents: ["opencode", "codex"],
     };
-    // Accept all defaults; saved targets must remain selected.
-    const { result, transcript } = await driveMenu("\r\r\r\r\r\r", config);
+    // Accept all defaults (paid models stay off); saved targets must remain selected.
+    const { result, transcript } = await driveMenu("\r\r\r\r\r\r\r", config);
+    expect(result.allowPaidModels).toBeUndefined();
     expect(result.targets).toEqual(["agents", "codex", "opencode"]);
     expect(result.agents).toEqual(["opencode", "codex"]);
     expect(result.agent).toBe("opencode");
@@ -177,7 +180,7 @@ describe("interactive setup menu", () => {
     const config = configFor(home, cwd);
     // Claude and OpenCode while keeping the default .agents target.
     const { result } = await driveMenu(
-      "\x1b[B " + "\x1b[B\x1b[B\x1b[B " + "\r\r\r\r\r\r",
+      "\x1b[B " + "\x1b[B\x1b[B\x1b[B " + "\r\r\r\r\r\r\r",
       config,
     );
     expect(result.targets).toEqual(["agents", "claude", "opencode"]);

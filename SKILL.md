@@ -1,12 +1,12 @@
 ---
 
 name: otherskill
-description: Fast, calibrated multi-skill router using free decision models on OpenRouter (inception/mercury-decide:free). Dynamically filters and injects only relevant skills from your skills bank per prompt to eliminate context bloat. Use on every prompt or before agent task execution.
+description: Fast, calibrated multi-skill router using cheap OpenRouter decision models (default perplexity/pplx-decider-flash-v1.2, paid, opt-in). Dynamically filters and injects only relevant skills from your skills bank per prompt to eliminate context bloat. Use on every prompt or before agent task execution.
 ---
 
 # OtherSkill
 
-High-speed, calibrated multi-skill router powered by the free decision model on OpenRouter (`inception/mercury-decide:free`).
+High-speed, calibrated multi-skill router powered by an OpenRouter decision model (default `perplexity/pplx-decider-flash-v1.2`, $0.01/M tokens). Paid models run only after an explicit opt-in (`allowPaidModels: true` or `OTHERSKILL_ALLOW_PAID_MODELS=1`).
 
 Instead of polluting the agent's context window by loading 70+ skills on startup, `otherskill` evaluates the user prompt against your centralized skill bank (`.agents/other_skills`) and injects only concise skill references and load instructions for that specific task.
 
@@ -130,8 +130,9 @@ Configure via environment variables or a `.env` file:
 # Required: OpenRouter API Key
 OPENROUTER_API_KEY=sk-or-v1-your-key-here
 
-# Free decision model (defaults to inception/mercury-decide:free, paid overrides rejected)
-OTHERSKILL_MODEL=inception/mercury-decide:free
+# Decision model (defaults to perplexity/pplx-decider-flash-v1.2; paid models need the opt-in below)
+OTHERSKILL_MODEL=perplexity/pplx-decider-flash-v1.2
+OTHERSKILL_ALLOW_PAID_MODELS=1
 
 # Optional: Global skills bank directory (defaults to ~/.agents/other_skills/)
 OTHERSKILL_GLOBAL_SKILLS_PATH=~/.agents/other_skills

@@ -71,6 +71,7 @@ describe("metatool online benchmark integration", () => {
     }) as any;
 
     const provider = new DecisionProvider({
+      allowPaidModels: true,
       apiKey: "offline-test-key",
       fetchFn: mockFetch,
     });

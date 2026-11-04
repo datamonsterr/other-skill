@@ -50,7 +50,7 @@ skill-routing workflow without claiming dedicated Jev API coverage.
 ## Configuration and reinstall
 
 The config uses a relative `bankPath` of `.otherskill/bank`, project scope,
-Claude as the configured agent and `inception/mercury-decide:free`.
+Claude as the configured agent and `perplexity/pplx-decider-flash-v1.2`.
 `docs` is added for README work; `backend` and `management` reuse starter IDs.
 Explicit categories make these imports deterministic without classifier requests.
 Neither config nor bank contains credentials. `OPENROUTER_API_KEY` stays in the

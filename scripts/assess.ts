@@ -5,6 +5,7 @@ import os from "node:os";
 import { parseSkillContent } from "../lib/parse_skill";
 import { DecisionProvider } from "../lib/provider";
 import { resolveSkillsSearchPaths } from "../index";
+import { DEFAULT_DECISION_MODEL } from "../lib/decision_models";
 
 export type SkillClassification = "ALWAYS_ON" | "ROUTED";
 
@@ -153,7 +154,7 @@ export async function assessSkill(params: {
     try {
       const provider = new DecisionProvider();
       const response = await provider.sendDecisionRequest({
-        model: process.env.MODEL || "inception/mercury-decide:free",
+        model: process.env.MODEL || DEFAULT_DECISION_MODEL,
         state: {
           skill_name: skillName,
           description: parsed.description,

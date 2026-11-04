@@ -11,7 +11,7 @@ describe("reviewed free provider", () => {
         state: {},
         questions: {},
       }),
-    ).rejects.toThrow(/rejected/);
+    ).rejects.toThrow(/Invalid decision model id/);
     expect(fetchFn).toHaveBeenCalledTimes(0);
   });
   it("bounds stalled response JSON and retries", async () => {

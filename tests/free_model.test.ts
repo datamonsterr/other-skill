@@ -3,11 +3,11 @@ import {
   DecisionProvider,
   isFreeModel,
   resolveActiveModel,
-  DEFAULT_FREE_MODEL,
+  DEFAULT_DECISION_MODEL,
 } from "../lib/provider";
 import type { Skill } from "../lib/model";
 
-describe("Free Decision Model enforcement", () => {
+describe("Decision model opt-in enforcement", () => {
   const origEnv = { ...process.env };
 
   beforeEach(() => {
@@ -16,6 +16,7 @@ describe("Free Decision Model enforcement", () => {
     delete process.env.JEV_MODEL;
     delete process.env.SKILL_SELECTOR_MODEL;
     delete process.env.OTHERSKILL_MODEL;
+    delete process.env.OTHERSKILL_ALLOW_PAID_MODELS;
   });
 
   afterEach(() => {
@@ -34,12 +35,41 @@ describe("Free Decision Model enforcement", () => {
     expect(isFreeModel("anthropic/claude-3.5-sonnet")).toBe(false);
   });
 
-  it("defaults to inception/mercury-decide:free", () => {
-    expect(resolveActiveModel()).toBe(DEFAULT_FREE_MODEL);
-    expect(resolveActiveModel()).toBe("inception/mercury-decide:free");
+  it("defaults to the cheap paid decision model perplexity/pplx-decider-flash-v1.2", () => {
+    expect(resolveActiveModel()).toBe(DEFAULT_DECISION_MODEL);
+    expect(resolveActiveModel()).toBe("perplexity/pplx-decider-flash-v1.2");
   });
 
-  it("rejects paid model overrides before network call", async () => {
+  it("does not send the paid default without an opt-in", async () => {
+    const mockFetch = mock(async () => new Response("{}", { status: 200 }));
+    const provider = new DecisionProvider({
+      apiKey: "test-key",
+      fetchFn: mockFetch as any,
+    });
+    await expect(
+      provider.sendDecisionRequest({ state: {}, questions: {} } as any),
+    ).rejects.toThrow(/requires opt-in/);
+    expect(mockFetch).toHaveBeenCalledTimes(0);
+  });
+
+  it("accepts paid models with allowPaidModels or OTHERSKILL_ALLOW_PAID_MODELS", () => {
+    expect(resolveActiveModel("~typesafe/jev-latest", true)).toBe(
+      "~typesafe/jev-latest",
+    );
+    expect(
+      new DecisionProvider({
+        apiKey: "test-key",
+        model: "respan/span-02",
+        allowPaidModels: true,
+      }),
+    ).toBeDefined();
+    process.env.OTHERSKILL_ALLOW_PAID_MODELS = "1";
+    expect(resolveActiveModel("respan/span-02")).toBe("respan/span-02");
+    process.env.MODEL = "~typesafe/jev-latest";
+    expect(resolveActiveModel()).toBe("~typesafe/jev-latest");
+  });
+
+  it("rejects paid model overrides without opt-in before network call", async () => {
     const mockFetch = mock(async () => new Response("{}", { status: 200 }));
 
     // Explicit paid model option
@@ -49,7 +79,7 @@ describe("Free Decision Model enforcement", () => {
         model: "~typesafe/jev-latest",
         fetchFn: mockFetch as any,
       });
-    }).toThrow(/paid.*rejected|only free/i);
+    }).toThrow(/requires opt-in/i);
 
     expect(mockFetch).toHaveBeenCalledTimes(0);
   });
@@ -76,8 +106,8 @@ describe("Free Decision Model enforcement", () => {
     process.env.MODEL = "~typesafe/jev-latest";
     process.env.JEV_MODEL = "openai/gpt-4o";
 
-    // Should NOT use the paid legacy model; must fallback safely to default free model
-    expect(resolveActiveModel()).toBe(DEFAULT_FREE_MODEL);
+    // Should NOT use the paid legacy model without opt-in; falls back to the default
+    expect(resolveActiveModel()).toBe(DEFAULT_DECISION_MODEL);
   });
 
   it("treats provider failure/timeout as local fallback or no selected skills with explicit source metadata", async () => {
