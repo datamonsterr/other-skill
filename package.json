@@ -47,10 +47,10 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^4.0.71",
-    "ai": "^7.0.107",
+    "@ai-sdk/openai": "^4.0.111",
+    "ai": "^7.0.165",
     "yaml": "^2.9.1",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   },
   "engines": {
     "bun": ">=1.3.0"

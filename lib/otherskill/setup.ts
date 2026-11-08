@@ -114,6 +114,9 @@ function companionSource(): string {
 const shippedCompanionHashes = [
   "e7138a1cfe8a198d634138eddf94b23a10b4757aa204e2c7b08e3572f74aed0b",
   "0a29c6344027bc4205f1749dc10b45e7e6ef3534832e2305311eeb561729911c",
+  // 1.4: documents `otherskill tree`.
+  "5a7320ed66adfbcaf812232b8b8a40df5c8fe19fef9aca1606040c6e1156dc93",
+  "2c0e1a88adedbf34e8de0570a245dec2b87522a13f88f35c71c6c981801752c8",
 ];
 function isUnmodifiedCompanion(value: string, content: string): boolean {
   if (value === content) return true;

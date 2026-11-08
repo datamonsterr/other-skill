@@ -158,9 +158,37 @@ In a git checkout it prints `git pull` instructions and exits 0.
 otherskill add github:anthropics/skills --path skills/frontend-design   # classify + copy into bank
 otherskill add ./my-skill --category testing                            # explicit category
 otherskill list                                                         # bank instances
+otherskill tree                                                         # every skill, full name, grouped by source
+otherskill tree --json                                                  # same tree as JSON
 otherskill search 'accessibility'                                       # GitHub search; needs gh auth or GH_TOKEN
 otherskill config show                                                  # also: get/set model|categories|limits, --apply
 ```
+
+`otherskill tree` prints every skill the harnesses can see plus the bank, with full names such as `caveman:caveman-review` and their source:
+
+```text
+Skills (8)
+├── Plugins (2)
+│   └── caveman@caveman (user, 2.7.0)  ~/.claude/plugins/cache/caveman/caveman/2.7.0
+│       ├── caveman:caveman
+│       └── caveman:caveman-review
+├── Synced (claude.ai) (1)
+│   └── ~/.claude/skills/synced/<bucket>
+│       └── anthropic-skills:docx
+├── User (2)
+│   └── ~/.claude/skills
+│       ├── tokenimum
+│       └── use-otherskill -> ~/.agents/skills/use-otherskill
+├── Project (1)
+│   └── /path/to/project/.claude/skills
+│       └── release
+└── OtherSkill bank (2)
+    └── frontend/ui-ux
+        ├── ui-kit  (file:///path/to/ui-kit)
+        └── theme-factory  (https://github.com/anthropics/skills/tree/HEAD/skills/theme-factory)
+```
+
+Sources: Claude plugins from `~/.claude/plugins/installed_plugins.json` (user installs, plus project/local installs for the current project), synced skills under `~/.claude/skills/synced`, user `~/.claude/skills`, shared `~/.agents/skills`, Codex `~/.codex/skills`, project `.claude/skills` and `.agents/skills`, and the OtherSkill bank grouped by category. Unreadable sources print a warning instead of failing.
 
 `--scope project` writes into the project bank. Full command reference: `otherskill --help`.
 
