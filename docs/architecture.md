@@ -53,6 +53,8 @@ otherskill search 'accessibility'                                         # need
 
 Automatic classification sends the skill name and description plus the taxonomy to the free model; `none` means no import. Review imported code and licenses before running it. GitHub tree URLs work; refs containing slashes need `--ref`.
 
+`otherskill tree [--json]` (`lib/otherskill/tree.ts`) is read-only. It lists native skills (Claude plugins with their `plugin:` namespace, claude.ai synced skills as `anthropic-skills:`, user, shared `.agents`, Codex and project skill directories) and the bank (via `discoverBank`, grouped by category with each copy's recorded source). Skills with unreadable frontmatter fall back to their directory name; unreadable plugin metadata or bank errors become warnings.
+
 ## References
 
 [OpenRouter Decisions](https://openrouter.ai/blog/tutorials/jev-vs-llm-when-to-use-each/), [decision model catalog](https://openrouter.ai/api/v1/models?output_modalities=decisions), [Claude hooks](https://code.claude.com/docs/en/hooks), [Codex hooks](https://learn.chatgpt.com/docs/hooks), [Antigravity hooks](https://antigravity.google/docs/hooks), [OpenCode plugins](https://opencode.ai/docs/plugins/). Measured evidence: [otherskill-evidence.md](otherskill-evidence.md).

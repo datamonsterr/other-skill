@@ -37,6 +37,7 @@ test("per-command help prints command usage, not the global help", async () => {
     "search",
     "create",
     "classify",
+    "tree",
   ];
   const results = await Promise.all(
     cmds.flatMap((cmd) =>

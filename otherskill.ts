@@ -46,6 +46,7 @@ import {
 import { hookInput, hookOutput } from "./lib/otherskill/hook";
 import { menu } from "./lib/otherskill/menu";
 import { update } from "./lib/otherskill/update";
+import { collectSkillTree, renderSkillTree } from "./lib/otherskill/tree";
 
 export const HELP = `OtherSkill — hidden skill sets and free OpenRouter routing
 Usage: otherskill <command> [arguments] [options]
@@ -65,6 +66,7 @@ Secondary commands:
                                      Generate SKILL.md and classify/copy into the bank
   classify <dir>                     Reclassify and copy a skill (explicit --category or model-driven)
   list                               Show scoped bank instances and membership
+  tree [--json]                      Show every skill with its full name, grouped by source
   doctor [--live]                    Check config, native visibility, hook paths and optionally free API
 Aliases: install = add; hook = find; select = find --json (routing result)
 Options:
@@ -131,6 +133,14 @@ Alias: install.
 `,
   list: `Usage: otherskill list [options]
 Print bank skill instances and their category membership as JSON.
+  --scope global|project, --home, --cwd, --config
+`,
+  tree: `Usage: otherskill tree [--json] [options]
+Print every skill as a tree grouped by source: Claude plugins (plugin@marketplace),
+claude.ai synced skills, user ~/.claude/skills, shared ~/.agents/skills, Codex,
+project .claude/skills and .agents/skills, and the OtherSkill bank by category.
+Names include the plugin namespace (for example caveman:caveman-review).
+  --json                Print the tree as JSON
   --scope global|project, --home, --cwd, --config
 `,
   config: `Usage: otherskill config [show|get <field>|set <field> <value>] [options]
@@ -648,6 +658,15 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
     }
     if (command === "list") {
       console.log(JSON.stringify(discoverBank(config), null, 2));
+      return 0;
+    }
+    if (command === "tree") {
+      const tree = collectSkillTree(config);
+      console.log(
+        values.json
+          ? JSON.stringify(tree, null, 2)
+          : renderSkillTree(tree, config.home),
+      );
       return 0;
     }
     if (command === "search") {

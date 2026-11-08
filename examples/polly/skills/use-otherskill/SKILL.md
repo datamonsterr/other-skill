@@ -25,6 +25,10 @@ Use `otherskill find --agent <harness> --prompt <user prompt>` to select skills 
 
 Pass prompt text as a literal argument through the tool's argument interface or proper shell quoting; never build an executable shell string from user text. Installed hooks may accept native payloads through stdin as documented. Do not scan the hidden bank or read every installed skill instead of routing.
 
+## Inspect skills
+
+Run `otherskill tree` to see every skill as a tree grouped by source: Claude plugins (`plugin@marketplace`), claude.ai synced skills, user `~/.claude/skills`, shared `~/.agents/skills`, Codex, project `.claude/skills` and `.agents/skills`, and the OtherSkill bank by category. Names include the plugin namespace, for example `caveman:caveman-review`. Add `--json` for machine-readable output. Use it to check where a skill comes from before adding or removing one.
+
 ## Config
 
 Run `otherskill config` to inspect and quickly edit/apply settings interactively. Use its documented show/get/set interface for scripts. Check which project or global config is effective before changing the model, enabled categories, bank, or harness settings.
